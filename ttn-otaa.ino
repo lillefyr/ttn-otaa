@@ -29,12 +29,19 @@
  * Do not forget to define the radio type correctly in
  * arduino-lmic/project_config/lmic_project_config.h or from your BOARDS.txt.
  *
- *******************************************************************************/
+ ******************************************************************************/
 
 #include <lmic.h>
 #include <hal/hal.h>
 #include <SPI.h>
+#include <SoftwareSerial.h>
+#include <TinyGPS.h>
 
+#include "font.h"
+#include <SSD1306.h>
+
+
+// TTGO T-Beam ESP32
 #define SCK     5    // GPIO5  -- SX1278's SCK
 #define MISO    19   // GPIO19 -- SX1278's MISnO
 #define MOSI    27   // GPIO27 -- SX1278's MOSI
@@ -48,6 +55,10 @@
 #define BUTTON  38
 #define GPSLED  6
 #define GPSLED1 9
+
+#define GPSRX   15 //12
+#define GPSTX   12 //34
+
 
 
 // This EUI must be in little-endian format, so least-significant-byte
@@ -68,7 +79,8 @@ static const u1_t PROGMEM APPKEY[16] = { 0xD9, 0x53, 0x51, 0xB2, 0xCA, 0x9B, 0x5
 
 void os_getDevKey (u1_t* buf) {  memcpy_P(buf, APPKEY, 16);}
 
-static uint8_t mydata[] = "Hello, world!";
+char gpsData[20];
+unsigned char gpsData2[20];
 static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
@@ -82,13 +94,168 @@ const lmic_pinmap lmic_pins = {
     .rst = 23,
     .dio = {26, 33, 32},
 };
-// Pin mapping
-//const lmic_pinmap lmic_pins = {
-//    .nss = 6,
-//    .rxtx = LMIC_UNUSED_PIN,
-//    .rst = 5,
-//    .dio = {2, 3, 4},
-//};
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+SSD1306Wire  display(0x3c, SDA, SCL);
+
+String text1 = "";
+String text2 = "TTGO";
+String text3 = "Ready";
+
+void drawText(int row, int col, String text){
+   display.clear();
+   display.setFont(Dialog_plain_20); //ArialMT_Plain_24);
+   display.setTextAlignment(TEXT_ALIGN_LEFT);
+   display.drawString(0, 0, text1);
+   display.drawString(0, 16, text2);
+   display.drawString(0, 32, text3);
+   text1 = text2;
+   text2 = text3;
+   text3 = text;
+   display.display();
+}
+
+SoftwareSerial gpsSerial(GPSTX, GPSRX);
+TinyGPS gps;
+
+//#define DUMPDATA 1
+#ifdef DUMPDATA
+void printFloat(double number, int digits)
+
+  if (number < 0.0)
+  {
+     Serial.print(F('-'));
+     number = -number;
+  }
+  // Handle negative numbers
+
+  // Round correctly so that print(1.999, 2) prints as "2.00"
+  double rounding = 0.5;
+  for (uint8_t i=0; i<digits; ++i)
+    rounding /= 10.0;
+
+  number += rounding;
+
+  // Extract the integer part of the number and print it
+  unsigned long int_part = (unsigned long)number;
+  double remainder = number - (double)int_part;
+  Serial.print(int_part);
+
+  // Print the decimal point, but only if there are digits beyond
+  if (digits > 0)
+    Serial.print(F("."));
+
+  // Extract digits from the remainder one at a time
+  while (digits-- > 0)
+  {
+    remainder *= 10.0;
+    int toPrint = int(remainder);
+    Serial.print(toPrint);
+    remainder -= toPrint;
+  }
+}
+
+void gpsdump( float flat, float flon, float falt, float fcourse, float fkmph, unsigned long age, unsigned long datetime, unsigned long hdop )
+{
+  unsigned long chars;
+  int year;
+  byte month, day, hour, minute, second, hundredths;
+  unsigned short sentences, failed;
+
+//  gps.get_position(&lat, &lon, &age);
+
+  Serial.print(F("Lat/Long(float): ")); printFloat(flat, 5);
+  Serial.print(F(", ")); printFloat(flon, 5);
+  Serial.print(F(" Fix age: ")); Serial.print(age); Serial.print(F("ms. "));
+  Serial.print(F(" (hdop): ")); printFloat(hdop); Serial.println();
+  Serial.print(F("Date(ddmmyy): ")); Serial.print(date); 
+  Serial.print(F(" Time(hhmmsscc): ")); 
+  Serial.println(datetime);
+
+/*
+  gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
+
+  Serial.print(F("Date: ")); Serial.print(static_cast<int>(month)); Serial.print(F("/")); Serial.print(static_cast<int>(day)); Serial.print(F("/")); Serial.print(year);
+  Serial.print(F("  Time: ")); Serial.print(static_cast<int>(hour+8));  Serial.print(F(":")); 
+    Serial.print(static_cast<int>(minute)); Serial.print(F(":")); Serial.print(static_cast<int>(second));
+    Serial.print(F(".")); Serial.print(static_cast<int>(hundredths)); Serial.print(F(" UTC +01:00 Switzerland"));
+    */
+    /*
+  Serial.print(F("  Fix age: "));  Serial.print(age); Serial.println(F("ms."));
+  */
+
+ /*
+  Serial.print(F("Alt(cm): ")); Serial.print(gps.altitude());
+  Serial.print(F(" Course(10^-2 deg): ")); Serial.print(gps.course());
+  Serial.print(F(" Speed(10^-2 knots): ")); Serial.println(gps.speed());
+  */
+  Serial.print(F("Alt(float): ")); printFloat(falt); 
+/*  
+  Serial.print(F(" Course(float): ")); printFloat(gps.f_course()); Serial.println();
+  Serial.print(F("Speed(knots): ")); printFloat(gps.f_speed_knots()); 
+  Serial.print(F(" (mph): ")); printFloat(gps.f_speed_mph());
+  Serial.print(F(" (mps): ")); printFloat(gps.f_speed_mps()); 
+  Serial.print(F(" (kmph): ")); printFloat(gps.f_speed_kmph()); Serial.println();
+
+  gps.stats(&chars, &sentences, &failed);
+  Serial.print(F("Stats: characters: ")); Serial.print(chars); 
+  Serial.print(F(" sentences: ")); Serial.print(sentences); 
+  Serial.print(F(" failed checksum: ")); Serial.println(failed);
+  */
+}
+#endif
+
+char ch;
+int i;
+void getGPSData() {
+  unsigned long start = millis();
+  i=0;
+  for (int i=0; i<8; i++) { gpsData[i] = 'A'; }
+  Serial.println(F("getGPSData["));
+  do
+  {
+    while (gpsSerial.available()) { ch = gpsSerial.read(); gps.encode(ch); if (i<8) { gpsData[i] = ch; i++; gpsData[i] = ' '; } }
+  } while (millis() - start < 1000);
+  
+  Serial.println(F("]"));
+  drawText(0,0,gpsData);
+}
+
+void getData(){
+  unsigned long int age, hdop, cnt;
+  int year;
+  float alt, lat, lon;
+  byte month, day, hour, minute, second, hundredths;
+  
+  getGPSData();
+  gps.f_get_position(&lat, &lon, &age);
+  gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
+  hdop = gps.hdop();
+  alt = gps.f_altitude();
+  Serial.print(F("Lat:")); Serial.println(lat);
+  Serial.print(F("Lon:")); Serial.println(lon);
+  Serial.print(F("Alt:")); Serial.println(alt);
+  Serial.println(year);
+  Serial.println(month);
+  Serial.println(day);
+  Serial.println(hour);
+  Serial.println(minute);
+  Serial.println(second);
+
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_RIGHT);
+  
+  //sprintf(gpsData, "%2d:%2d:%2d    ", hour, minute, second);
+  //drawText(0,0, gpsData);
+  
+  //sprintf(gpsData, "%4.3f   ", lon);
+  //drawText(0,0, gpsData);
+  
+  //sprintf(gpsData, "%4.3f   ", lat);
+  //drawText(0,0, gpsData);
+  
+  ////drawText(31, 13, "Hello");
+}
 
 void printHex2(unsigned v) {
     v &= 0xff;
@@ -103,18 +270,23 @@ void onEvent (ev_t ev) {
     switch(ev) {
         case EV_SCAN_TIMEOUT:
             Serial.println(F("EV_SCAN_TIMEOUT"));
+            //drawText(0,0,"TIMEOUT   ");
             break;
         case EV_BEACON_FOUND:
             Serial.println(F("EV_BEACON_FOUND"));
+            //drawText(0,0,"BEACON_FND");
             break;
         case EV_BEACON_MISSED:
             Serial.println(F("EV_BEACON_MISSED"));
+            //drawText(0,0,"BEACON_MIS");
             break;
         case EV_BEACON_TRACKED:
             Serial.println(F("EV_BEACON_TRACKED"));
+            //drawText(0,0,"BEACON_TRK");
             break;
         case EV_JOINING:
             Serial.println(F("EV_JOINING"));
+            //drawText(0,0,"joining   ");
             break;
         case EV_JOINED:
             Serial.println(F("EV_JOINED"));
@@ -145,8 +317,9 @@ void onEvent (ev_t ev) {
             }
             // Disable link check validation (automatically enabled
             // during join, but because slow data rates change max TX
-	    // size, we don't use it in this example.
+      	    // size, we don't use it in this example.
             LMIC_setLinkCheckMode(0);
+            //drawText(0,0,"JOINED    ");
             break;
         /*
         || This event is defined but not used in the code. No
@@ -158,9 +331,11 @@ void onEvent (ev_t ev) {
         */
         case EV_JOIN_FAILED:
             Serial.println(F("EV_JOIN_FAILED"));
+            //drawText(0,0,"JOIN_FAILED");
             break;
         case EV_REJOIN_FAILED:
             Serial.println(F("EV_REJOIN_FAILED"));
+            //drawText(0,0,"REJOIN_FAI");
             break;
         case EV_TXCOMPLETE:
             Serial.println(F("EV_TXCOMPLETE (includes waiting for RX windows)"));
@@ -173,22 +348,28 @@ void onEvent (ev_t ev) {
             }
             // Schedule next transmission
             os_setTimedCallback(&sendjob, os_getTime()+sec2osticks(TX_INTERVAL), do_send);
+            //drawText(0,0,"TXCOMPLETE");
             break;
         case EV_LOST_TSYNC:
             Serial.println(F("EV_LOST_TSYNC"));
+            //drawText(0,0,"LOST_TSYNC");
             break;
         case EV_RESET:
             Serial.println(F("EV_RESET"));
+            //drawText(0,0,"RESET     ");
             break;
         case EV_RXCOMPLETE:
             // data received in ping slot
             Serial.println(F("EV_RXCOMPLETE"));
+            //drawText(0,0,"RXCOMPLETE");
             break;
         case EV_LINK_DEAD:
             Serial.println(F("EV_LINK_DEAD"));
+            //drawText(0,0,"LINK_DEAD ");
             break;
         case EV_LINK_ALIVE:
             Serial.println(F("EV_LINK_ALIVE"));
+            //drawText(0,0,"LINK_ALIVE");
             break;
         /*
         || This event is defined but not used in the code. No
@@ -200,58 +381,80 @@ void onEvent (ev_t ev) {
         */
         case EV_TXSTART:
             Serial.println(F("EV_TXSTART"));
+            //drawText(0,0,"txstart   ");
             break;
         case EV_TXCANCELED:
             Serial.println(F("EV_TXCANCELED"));
+            //drawText(0,0,"TXCANCELED");
             break;
         case EV_RXSTART:
             /* do not print anything -- it wrecks timing */
             break;
         case EV_JOIN_TXCOMPLETE:
             Serial.println(F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
+            //drawText(0,0,"join_txcom");
+            //drawText(0,0,"no JoinAcc");
             break;
 
         default:
             Serial.print(F("Unknown event: "));
             Serial.println((unsigned) ev);
+            //drawText(0,0,"Unknown ev");
             break;
     }
+    getData();
+    Serial.println(gpsData);
 }
 
 void do_send(osjob_t* j){
+    getData();
+    Serial.println(gpsData);
     // Check if there is not a current TX/RX job running
     if (LMIC.opmode & OP_TXRXPEND) {
         Serial.println(F("OP_TXRXPEND, not sending"));
+        //drawText(0,0,"TXRXPEND");
+        //drawText(0,0,"not sendin");
     } else {
         // Prepare upstream data transmission at the next possible time.
-        LMIC_setTxData2(1, mydata, sizeof(mydata)-1, 0);
+        for (int i=0; i<sizeof(gpsData2); i++) {
+          gpsData2[i] = (unsigned char)gpsData[i];
+        }
+        LMIC_setTxData2(1, gpsData2, sizeof(gpsData2)-1, 0);
         Serial.println(F("Packet queued"));
     }
     // Next TX is scheduled after TX_COMPLETE event.
 }
 
 void setup() {
-    Serial.begin(115200);
-    Serial.println(F("\nStarting"));
+  Serial.begin(115200);
+  Serial.println(F("\nStarting ttn-otaa"));
+  Serial.println(F("TTGO ESP32 T-BEAM Lora GPS"));
+  
+  Serial.print("SDA=");Serial.println(SDA);
+  Serial.print("SCL=");Serial.println(SCL);
+  Wire.begin(SDA,SCL);
+  
+  display.init();
 
-    #ifdef VCC_ENABLE
-    // For Pinoccio Scout boards
-    pinMode(VCC_ENABLE, OUTPUT);
-    digitalWrite(VCC_ENABLE, HIGH);
-    delay(1000);
-    #endif
+  display.flipScreenVertically();
+  display.setFont(Dialog_plain_20);  //ArialMT_Plain_10);
 
-
-    // LMIC init
-    os_init();
-    // Reset the MAC state. Session and pending data transfers will be discarded.
-    Serial.println(F("os_init done"));
-    LMIC_reset();
-
-    // Start job (sending automatically starts OTAA too)
-    do_send(&sendjob);
+  for (int i=0; i<8; i++) { gpsData[i] = '?'; }
+//  gpsSerial.begin(9600, SERIAL_8N1, GPSTX, GPSRX);
+//  gpsSerial.setTimeout(2);
+    gpsSerial.begin(9600);  
+  // LMIC init
+  os_init();
+  // Reset the MAC state. Session and pending data transfers will be discarded.
+  Serial.println(F("os_init done"));
+  LMIC_reset();
+  
+  getData();
+  Serial.println(gpsData);
+  // Start job (sending automatically starts OTAA too)
+  do_send(&sendjob);
 }
 
 void loop() {
-    os_runloop_once();
+  os_runloop_once();
 }
