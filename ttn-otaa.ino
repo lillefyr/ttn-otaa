@@ -40,7 +40,6 @@
 #include "font.h"
 #include <SSD1306.h>
 
-
 // TTGO T-Beam ESP32
 #define SCK     5    // GPIO5  -- SX1278's SCK
 #define MISO    19   // GPIO19 -- SX1278's MISnO
@@ -58,7 +57,6 @@
 
 #define GPSRX   15 //12
 #define GPSTX   12 //34
-
 
 
 // This EUI must be in little-endian format, so least-significant-byte
@@ -115,7 +113,7 @@ void drawText(int row, int col, String text){
    display.display();
 }
 
-SoftwareSerial gpsSerial(GPSTX, GPSRX);
+SoftwareSerial gpsSerial;
 TinyGPS gps;
 
 //#define DUMPDATA 1
@@ -208,6 +206,7 @@ void gpsdump( float flat, float flon, float falt, float fcourse, float fkmph, un
 char ch;
 int i;
 void getGPSData() {
+  /*
   unsigned long start = millis();
   i=0;
   for (int i=0; i<8; i++) { gpsData[i] = 'A'; }
@@ -219,6 +218,7 @@ void getGPSData() {
   
   Serial.println(F("]"));
   drawText(0,0,gpsData);
+*/
 }
 
 void getData(){
@@ -442,19 +442,55 @@ void setup() {
   for (int i=0; i<8; i++) { gpsData[i] = '?'; }
 //  gpsSerial.begin(9600, SERIAL_8N1, GPSTX, GPSRX);
 //  gpsSerial.setTimeout(2);
-    gpsSerial.begin(9600);  
+//    gpsSerial.begin(9600);
   // LMIC init
-  os_init();
+//  os_init();
   // Reset the MAC state. Session and pending data transfers will be discarded.
   Serial.println(F("os_init done"));
-  LMIC_reset();
+//  LMIC_reset();
   
   getData();
   Serial.println(gpsData);
   // Start job (sending automatically starts OTAA too)
-  do_send(&sendjob);
+//  do_send(&sendjob);
 }
 
+int8_t myTX = 0;
+int8_t myRX = 0;
+
+/*
+ Users/asbjorn/arduino/REPO/lillefyr/ttn-otaa/ttn-otaa.ino: In function 'void loop()':
+ttn-otaa:473:53: error: invalid conversion from 'int' to 'SoftwareSerialConfig' [-fpermissive]
+         gpsSerial.begin(9600, SERIAL_8N1, myTX, myRX);
+                                                     ^
+In file included from /Users/asbjorn/arduino/REPO/lillefyr/ttn-otaa/ttn-otaa.ino:37:0:
+/Users/asbjorn/arduino/REPO/lillefyr/libraries/EspSoftwareSerial/src/SoftwareSerial.h:110:10: note:   initializing argument 2 of '
+void SoftwareSerial::begin(uint32_t, SoftwareSerialConfig, int8_t, int8_t)'
+     void begin(uint32_t baud, SoftwareSerialConfig config,
+ 
+ */
 void loop() {
-  os_runloop_once();
+  //os_runloop_once();
+
+  if (( myRX !=  5 ) &&
+      ( myRX != 18 ) &&
+      ( myRX != 19 ) &&
+      ( myRX != 23 ) &&
+      ( myRX != 26 ) &&
+      ( myRX != 27 ) &&
+      ( myRX != 32 ) &&
+      ( myRX != 33 ) &&
+      ( myRX != 38 )) {
+        gpsSerial.begin(9600, SWSERIAL_8N1, myTX, myRX);
+        gpsSerial.setTimeout(2);
+        if ( gpsSerial.available() ) {
+          display.clear();
+          display.setTextAlignment(TEXT_ALIGN_RIGHT);
+          sprintf(gpsData, "Pin %2d ", myRX);
+          drawText(0,0,gpsData);
+        }
+        delay(1000);
+        myRX++;
+        if (RX > 39) { myRX = 0; }
+      }
 }
