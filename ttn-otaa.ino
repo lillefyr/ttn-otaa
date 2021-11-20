@@ -34,7 +34,10 @@
 #include <lmic.h>
 #include <hal/hal.h>
 #include <SPI.h>
-#include <SoftwareSerial.h>
+/*
+ * If no data arrives from NEO-6m look here:
+ * git clone https://github.com/eriktheV-king/TTGO_T-beam_GPS-reset
+ */
 #include <TinyGPS.h>
 
 #include "font.h"
@@ -55,9 +58,8 @@
 #define GPSLED  6
 #define GPSLED1 9
 
-#define GPSRX   15 //12
-#define GPSTX   12 //34
-
+#define GPSTX   13 //12  // or the other waz round
+#define GPSRX   14 //34
 
 // This EUI must be in little-endian format, so least-significant-byte
 // first. When copying an EUI from ttnctl output, this means to reverse
@@ -113,7 +115,9 @@ void drawText(int row, int col, String text){
    display.display();
 }
 
-SoftwareSerial gpsSerial;
+#define GPS_RX_PIN      34
+#define GPS_TX_PIN      12
+HardwareSerial gpsSerial(1); 
 TinyGPS gps;
 
 //#define DUMPDATA 1
@@ -206,19 +210,20 @@ void gpsdump( float flat, float flon, float falt, float fcourse, float fkmph, un
 char ch;
 int i;
 void getGPSData() {
-  /*
-  unsigned long start = millis();
-  i=0;
-  for (int i=0; i<8; i++) { gpsData[i] = 'A'; }
-  Serial.println(F("getGPSData["));
-  do
-  {
-    while (gpsSerial.available()) { ch = gpsSerial.read(); gps.encode(ch); if (i<8) { gpsData[i] = ch; i++; gpsData[i] = ' '; } }
-  } while (millis() - start < 1000);
-  
-  Serial.println(F("]"));
-  drawText(0,0,gpsData);
-*/
+//  long int start = millis();
+//  do
+//  {
+  i = 0;
+  while (gpsSerial.available()) {
+    ch = gpsSerial.read();
+    if ( i < 8 ) { gpsData[i] = ch; i++; }
+  }
+      //gps.encode(gpsSerial.read()); }
+//  } while (millis() - start < 2000);
+
+  if ( i > 0 ) {
+    drawText(31,13, gpsData);
+  }
 }
 
 void getData(){
@@ -228,6 +233,7 @@ void getData(){
   byte month, day, hour, minute, second, hundredths;
   
   getGPSData();
+  /*
   gps.f_get_position(&lat, &lon, &age);
   gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
   hdop = gps.hdop();
@@ -245,16 +251,18 @@ void getData(){
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   
-  //sprintf(gpsData, "%2d:%2d:%2d    ", hour, minute, second);
-  //drawText(0,0, gpsData);
+//  sprintf(gpsData, "%2d:%2d:%2d    ", hour, minute, second);
+//  drawText(31,13, gpsData);
   
   //sprintf(gpsData, "%4.3f   ", lon);
-  //drawText(0,0, gpsData);
+  //drawText(31,13, gpsData);
   
   //sprintf(gpsData, "%4.3f   ", lat);
-  //drawText(0,0, gpsData);
+  //drawText(31,13, gpsData);
   
   ////drawText(31, 13, "Hello");
+  */
+  delay(1000);
 }
 
 void printHex2(unsigned v) {
@@ -270,23 +278,23 @@ void onEvent (ev_t ev) {
     switch(ev) {
         case EV_SCAN_TIMEOUT:
             Serial.println(F("EV_SCAN_TIMEOUT"));
-            //drawText(0,0,"TIMEOUT   ");
+            drawText(31,13,"TIMEOUT   ");
             break;
         case EV_BEACON_FOUND:
             Serial.println(F("EV_BEACON_FOUND"));
-            //drawText(0,0,"BEACON_FND");
+            drawText(31,13,"BEACON_FND");
             break;
         case EV_BEACON_MISSED:
             Serial.println(F("EV_BEACON_MISSED"));
-            //drawText(0,0,"BEACON_MIS");
+            drawText(31,13,"BEACON_MIS");
             break;
         case EV_BEACON_TRACKED:
             Serial.println(F("EV_BEACON_TRACKED"));
-            //drawText(0,0,"BEACON_TRK");
+            drawText(31,13,"BEACON_TRK");
             break;
         case EV_JOINING:
             Serial.println(F("EV_JOINING"));
-            //drawText(0,0,"joining   ");
+            drawText(31,13,"joining   ");
             break;
         case EV_JOINED:
             Serial.println(F("EV_JOINED"));
@@ -319,7 +327,7 @@ void onEvent (ev_t ev) {
             // during join, but because slow data rates change max TX
       	    // size, we don't use it in this example.
             LMIC_setLinkCheckMode(0);
-            //drawText(0,0,"JOINED    ");
+            drawText(31,13,"JOINED    ");
             break;
         /*
         || This event is defined but not used in the code. No
@@ -331,11 +339,11 @@ void onEvent (ev_t ev) {
         */
         case EV_JOIN_FAILED:
             Serial.println(F("EV_JOIN_FAILED"));
-            //drawText(0,0,"JOIN_FAILED");
+            drawText(31,13,"JOIN_FAILED");
             break;
         case EV_REJOIN_FAILED:
             Serial.println(F("EV_REJOIN_FAILED"));
-            //drawText(0,0,"REJOIN_FAI");
+            drawText(31,13,"REJOIN_FAI");
             break;
         case EV_TXCOMPLETE:
             Serial.println(F("EV_TXCOMPLETE (includes waiting for RX windows)"));
@@ -348,28 +356,28 @@ void onEvent (ev_t ev) {
             }
             // Schedule next transmission
             os_setTimedCallback(&sendjob, os_getTime()+sec2osticks(TX_INTERVAL), do_send);
-            //drawText(0,0,"TXCOMPLETE");
+            drawText(31,13,"TXCOMPLETE");
             break;
         case EV_LOST_TSYNC:
             Serial.println(F("EV_LOST_TSYNC"));
-            //drawText(0,0,"LOST_TSYNC");
+            drawText(31,13,"LOST_TSYNC");
             break;
         case EV_RESET:
             Serial.println(F("EV_RESET"));
-            //drawText(0,0,"RESET     ");
+            drawText(31,13,"RESET     ");
             break;
         case EV_RXCOMPLETE:
             // data received in ping slot
             Serial.println(F("EV_RXCOMPLETE"));
-            //drawText(0,0,"RXCOMPLETE");
+            drawText(31,13,"RXCOMPLETE");
             break;
         case EV_LINK_DEAD:
             Serial.println(F("EV_LINK_DEAD"));
-            //drawText(0,0,"LINK_DEAD ");
+            drawText(31,13,"LINK_DEAD ");
             break;
         case EV_LINK_ALIVE:
             Serial.println(F("EV_LINK_ALIVE"));
-            //drawText(0,0,"LINK_ALIVE");
+            drawText(31,13,"LINK_ALIVE");
             break;
         /*
         || This event is defined but not used in the code. No
@@ -381,25 +389,25 @@ void onEvent (ev_t ev) {
         */
         case EV_TXSTART:
             Serial.println(F("EV_TXSTART"));
-            //drawText(0,0,"txstart   ");
+            drawText(31,13,"txstart   ");
             break;
         case EV_TXCANCELED:
             Serial.println(F("EV_TXCANCELED"));
-            //drawText(0,0,"TXCANCELED");
+            drawText(31,13,"TXCANCELED");
             break;
         case EV_RXSTART:
             /* do not print anything -- it wrecks timing */
             break;
         case EV_JOIN_TXCOMPLETE:
             Serial.println(F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
-            //drawText(0,0,"join_txcom");
-            //drawText(0,0,"no JoinAcc");
+            drawText(31,13,"join_txcom");
+            drawText(31,13,"no JoinAcc");
             break;
 
         default:
             Serial.print(F("Unknown event: "));
             Serial.println((unsigned) ev);
-            //drawText(0,0,"Unknown ev");
+            drawText(31,13,"Unknown ev");
             break;
     }
     getData();
@@ -412,8 +420,8 @@ void do_send(osjob_t* j){
     // Check if there is not a current TX/RX job running
     if (LMIC.opmode & OP_TXRXPEND) {
         Serial.println(F("OP_TXRXPEND, not sending"));
-        //drawText(0,0,"TXRXPEND");
-        //drawText(0,0,"not sendin");
+        drawText(31,13,"TXRXPEND");
+        drawText(31,13,"not sendin");
     } else {
         // Prepare upstream data transmission at the next possible time.
         for (int i=0; i<sizeof(gpsData2); i++) {
@@ -440,57 +448,24 @@ void setup() {
   display.setFont(Dialog_plain_20);  //ArialMT_Plain_10);
 
   for (int i=0; i<8; i++) { gpsData[i] = '?'; }
-//  gpsSerial.begin(9600, SERIAL_8N1, GPSTX, GPSRX);
-//  gpsSerial.setTimeout(2);
-//    gpsSerial.begin(9600);
+  
+  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+
   // LMIC init
-//  os_init();
+  os_init();
   // Reset the MAC state. Session and pending data transfers will be discarded.
   Serial.println(F("os_init done"));
-//  LMIC_reset();
+  LMIC_reset();
   
-  getData();
-  Serial.println(gpsData);
   // Start job (sending automatically starts OTAA too)
-//  do_send(&sendjob);
+  do_send(&sendjob);
 }
 
-int8_t myTX = 0;
-int8_t myRX = 0;
-
-/*
- Users/asbjorn/arduino/REPO/lillefyr/ttn-otaa/ttn-otaa.ino: In function 'void loop()':
-ttn-otaa:473:53: error: invalid conversion from 'int' to 'SoftwareSerialConfig' [-fpermissive]
-         gpsSerial.begin(9600, SERIAL_8N1, myTX, myRX);
-                                                     ^
-In file included from /Users/asbjorn/arduino/REPO/lillefyr/ttn-otaa/ttn-otaa.ino:37:0:
-/Users/asbjorn/arduino/REPO/lillefyr/libraries/EspSoftwareSerial/src/SoftwareSerial.h:110:10: note:   initializing argument 2 of '
-void SoftwareSerial::begin(uint32_t, SoftwareSerialConfig, int8_t, int8_t)'
-     void begin(uint32_t baud, SoftwareSerialConfig config,
- 
- */
 void loop() {
-  //os_runloop_once();
+  os_runloop_once();
 
-  if (( myRX !=  5 ) &&
-      ( myRX != 18 ) &&
-      ( myRX != 19 ) &&
-      ( myRX != 23 ) &&
-      ( myRX != 26 ) &&
-      ( myRX != 27 ) &&
-      ( myRX != 32 ) &&
-      ( myRX != 33 ) &&
-      ( myRX != 38 )) {
-        gpsSerial.begin(9600, SWSERIAL_8N1, myTX, myRX);
-        gpsSerial.setTimeout(2);
-        if ( gpsSerial.available() ) {
-          display.clear();
-          display.setTextAlignment(TEXT_ALIGN_RIGHT);
-          sprintf(gpsData, "Pin %2d ", myRX);
-          drawText(0,0,gpsData);
-        }
-        delay(1000);
-        myRX++;
-        if (RX > 39) { myRX = 0; }
-      }
+//  getData();
+//  Serial.println(gpsData);
+  delay(10);
 }
+  
